@@ -1,0 +1,18 @@
+compactor:
+  tableSize: 268435456    # 256 MB
+  levelSize: 4
+
+sstmanager:
+  bloom:
+    expectedElements: 5000000     # 5 миллионов ключей
+    falsePositiveRate: 0.005      # 0.5% ложных срабатываний
+
+wal:
+  walWorkdir: "data/wal/"
+  walPrefix: "wal_"
+
+memtable:
+  maxSize: 1024 # 1 мегабайт для теста
+
+sstWorkdir: "data/sst/"
+sstPrefix: "data_sst"
