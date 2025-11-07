@@ -1,7 +1,6 @@
 package wal
 
 import (
-	"bufio"
 	"context"
 	"encoding/binary"
 	"fmt"
@@ -127,10 +126,9 @@ func (m *Manager) findActiveLog() error {
 		modifyed := info.ModTime()
 		if lastMod < modifyed.Unix() {
 			
-			reader := bufio.NewReader(file)
 
 			var createdAt int64
-			err := binary.Read(reader, binary.LittleEndian, &createdAt)
+			err := binary.Read(file, binary.LittleEndian, &createdAt)
 			if err != nil {
 				log.Println("Ошибка чтения времени создания wal: ", err)
 			}

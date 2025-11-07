@@ -1,7 +1,6 @@
 package ss
 
 import (
-	"bufio"
 	"bytes"
 	"context"
 	"encoding/binary"
@@ -283,7 +282,7 @@ func (m *Manager) Find(key []byte) ([]byte, bool) {
 		level := m.storage.levels[i]
 		level.mu.RLock()
 		defer level.mu.RUnlock()
-		
+
 		for j := range level.tables {
 			
 			table := level.tables[j]
@@ -309,9 +308,8 @@ func (m *Manager) Find(key []byte) ([]byte, bool) {
 				continue
 			}
 
-			reader := bufio.NewReader(file)
 			mask := make([]byte, bloomSize)
-			_, err = io.ReadFull(reader, mask)
+			_, err = io.ReadFull(file, mask)
 			if err != nil {
 				log.Println("Ошибка при чтении bloom маски: ", err)
 				continue
@@ -345,10 +343,9 @@ func (m *Manager) findViaIndex(table *domain.SSTable, file *os.File, key []byte)
 		return nil, false
 	}
 
-	reader := bufio.NewReader(file)
 
 	var indexLen uint32
-	err = binary.Read(reader, binary.LittleEndian, &indexLen)
+	err = binary.Read(file, binary.LittleEndian, &indexLen)
 	if err != nil {
 		log.Println("Ошибка при чтении длины индекса: ", err)
 		return nil, false
@@ -360,7 +357,7 @@ func (m *Manager) findViaIndex(table *domain.SSTable, file *os.File, key []byte)
 	// Читаем индексные записи
 	bytesRead := uint32(0)
 	for bytesRead < indexLen {
-		index, err := m.ReadIndex(reader)
+		index, err := m.ReadIndex(file)
 		if err != nil {
 			break
 		}
@@ -427,7 +424,6 @@ func (m *Manager) readRecordUntil(file *os.File, key []byte, startOffset, endOff
 		return nil, false
 	}
 
-	// reader := bufio.NewReader(file)
 	currentOffset := startOffset
 
 	// Линейный поиск в указанном диапазоне
@@ -464,7 +460,7 @@ func (m *Manager) readRecordUntil(file *os.File, key []byte, startOffset, endOff
 	return nil, false
 }
 
-func (m *Manager) ReadIndex(reader *bufio.Reader) (domain.Index, error) {
+func (m *Manager) ReadIndex(reader *os.File) (domain.Index, error) {
 	var keyLen uint32
 	err := binary.Read(reader, binary.LittleEndian, &keyLen)
 	if err != nil {
