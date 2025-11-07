@@ -2,7 +2,6 @@ package engine
 
 import (
 	"context"
-	"log"
 	"sync"
 	"varvaDB/config"
 	memtable "varvaDB/internal/core/memTable"
@@ -68,8 +67,8 @@ func (l *LSMCore) Start(ctx context.Context) {
 }
 
 func (l *LSMCore) Info() {
-	log.Println("Информативная сводка...")
-	log.Println("Размер memtable", l.memTable.Size())
+	// log.Println("Информативная сводка...")
+	// log.Println("Размер memtable", l.memTable.Size())
 }
 
 func (l *LSMCore) Put(key, value []byte) error {

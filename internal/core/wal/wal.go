@@ -135,9 +135,9 @@ func (w *Wal) GetRecords() []*domain.Record {
 	defer w.mu.Unlock()
 	oldRecords := make([]*domain.Record, 0, 1000) // Выделяем место для 1000 записей для уменьшения кол-ва аллокаций
 
-	reader := bufio.NewReader(w.file)
+	// reader := bufio.NewReader(w.file)
 	for {
-		record, err := domain.ReadRecord(reader)
+		record, err := domain.ReadRecord( w.file)
 		if err == io.EOF {
 			break
 		} else if err != nil {

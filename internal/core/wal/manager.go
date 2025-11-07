@@ -165,7 +165,7 @@ func (m *Manager) findActiveLog() error {
 func (m *Manager) DeleteWal(cfg *config.WalConfig, id uint64) ( error) {
 	
 	walName := fmt.Sprintf("wal_%d.log", id)
-
+	log.Println("Удаляем ", walName)
 	walFilePath := filepath.Join(cfg.WalWorkdir, walName)
 
 	err := os.Remove(walFilePath)

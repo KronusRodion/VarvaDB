@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"os"
 	"time"
 )
 
@@ -65,51 +66,87 @@ func (r *Record) SetOperation(operation Operation) *Record {
 	return r
 }
 
-func ReadRecord(r io.Reader) (*Record, error) {
+func ReadRecord(f *os.File) (*Record, error) {
 
+	currentPos, err := f.Seek(0, io.SeekCurrent)
+	if err != nil {
+		log.Println(err)
+	}
+	log.Println("POS ", currentPos)
 
 	var operation byte
-	err := binary.Read(r, binary.LittleEndian, &operation)
+	err = binary.Read(f, binary.LittleEndian, &operation)
 	if err != nil {
 		return nil, err
 	}
 
+	currentPos, err = f.Seek(0, io.SeekCurrent)
+	if err != nil {
+		log.Println(err)
+	}
+	log.Println("POS ", currentPos)
+	
 	var timestamp int64
-	err = binary.Read(r, binary.LittleEndian, &timestamp)
+	err = binary.Read(f, binary.LittleEndian, &timestamp)
 	if err != nil {
 		return nil, err
 	}
+
+	currentPos, err = f.Seek(0, io.SeekCurrent)
+	if err != nil {
+		log.Println(err)
+	}
+	log.Println("POS ", currentPos)
+
 	var keyLen int32
-	err = binary.Read(r, binary.LittleEndian, &keyLen)
+	err = binary.Read(f, binary.LittleEndian, &keyLen)
 	if err != nil {
 		return nil, err
 	}
 	log.Println("keyLen - ", keyLen)
+	currentPos, err = f.Seek(0, io.SeekCurrent)
+	if err != nil {
+		log.Println(err)
+	}
+	log.Println("POS ", currentPos)
 
 	key := make([]byte, keyLen)
-	err = binary.Read(r, binary.LittleEndian, &key)
+	err = binary.Read(f, binary.LittleEndian, &key)
 	if err != nil {
 		return nil, err
 	}
+	currentPos, err = f.Seek(0, io.SeekCurrent)
+	if err != nil {
+		log.Println(err)
+	}
+	log.Println("POS ", currentPos)
 
 	var valueLen int32
-	err = binary.Read(r, binary.LittleEndian, &valueLen)
+	err = binary.Read(f, binary.LittleEndian, &valueLen)
 	if err != nil {
 		return nil, err
 	}
+	log.Println("valueLen - ", valueLen)
 	if valueLen < 0 {
 		return nil, fmt.Errorf("invalid value length: %d (hex: %x)", 
 			valueLen, uint32(valueLen))
 	}
-	if valueLen > 10*1024*1024 {
-		return nil, fmt.Errorf("value too long: %d", valueLen)
+	currentPos, err = f.Seek(0, io.SeekCurrent)
+	if err != nil {
+		log.Println(err)
 	}
+	log.Println("POS ", currentPos)
 	
 	value := make([]byte, valueLen)
-	err = binary.Read(r, binary.LittleEndian, &value)
+	err = binary.Read(f, binary.LittleEndian, &value)
 	if err != nil {
 		return nil, err
 	}
+	currentPos, err = f.Seek(0, io.SeekCurrent)
+	if err != nil {
+		log.Println(err)
+	}
+	log.Println("POS ", currentPos)
 
 	record := NewRecordWithTimestamp(key, value, Operation(operation), timestamp)
 

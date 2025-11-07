@@ -11,7 +11,6 @@ import (
 	"log"
 	"os"
 	"path/filepath"
-	"slices"
 	"strings"
 	"sync"
 	"varvaDB/config"
@@ -19,19 +18,18 @@ import (
 )
 
 type Manager struct {
-	sstChan   		chan *domain.SSTable
-	workdir   		string
-	SSTPrefix 		string
-	tables    		[]*domain.SSTable
-	tableSize 		int
-	levelSize 		int
-	mu        		*sync.RWMutex
-	saver     		*Saver
-	
+	sstChan   chan *domain.SSTable
+	workdir   string
+	SSTPrefix string
+	storage   *storage
+	tableSize int
+	levelSize int
+	mu        *sync.RWMutex
+	saver     *Saver
 }
 
 func NewManager(cfg *config.Config, recordsChan chan *domain.SSMessage, deleteWalChan chan<- uint64) *Manager {
-	tables := make([]*domain.SSTable, 0, cfg.Compactor.LevelSize)
+	storage := NewStorage()
 
 	// NewSaver принимает записи из канала и
 	saver, ch := newSaver(cfg, recordsChan, deleteWalChan)
@@ -41,10 +39,10 @@ func NewManager(cfg *config.Config, recordsChan chan *domain.SSMessage, deleteWa
 		sstChan:   ch,
 		workdir:   cfg.SSTWorkdir,
 		SSTPrefix: cfg.SSTPrefix,
-		tables:    tables,
+		storage:   storage,
 		tableSize: cfg.Compactor.TableSize,
 		levelSize: cfg.Compactor.LevelSize,
-		mu: &sync.RWMutex{},
+		mu:        &sync.RWMutex{},
 	}
 }
 
@@ -60,20 +58,20 @@ func (m *Manager) Start(ctx context.Context) error {
 	}
 	log.Println("Проверка закончена")
 	go m.HandleSSTChan(ctx)
-	
+
 	m.saver.Start(ctx)
 	log.Println("ss Manager запущен.")
 	return nil
 }
 
 func (m *Manager) HandleSSTChan(ctx context.Context) {
-log.Println("Начинаем держать sst канал")
+	log.Println("Начинаем держать sst канал")
 loop:
 	for {
 		select {
 		case sst := <-m.sstChan:
 			m.mu.Lock()
-			m.tables = append(m.tables, sst)
+			m.storage.AppendInLevel(sst, 0)
 			m.mu.Unlock()
 
 		case <-ctx.Done():
@@ -88,9 +86,9 @@ func (m *Manager) CheckSST() error {
 	defer m.mu.Unlock()
 
 	if err := os.MkdirAll(m.workdir, 0755); err != nil {
-        return err
-    }
-	
+		return err
+	}
+
 	log.Println("begin dir read: ", m.workdir)
 	files, err := os.ReadDir(m.workdir)
 	if err != nil {
@@ -112,17 +110,11 @@ func (m *Manager) CheckSST() error {
 			log.Println("Ошибка чтения файлы в директории с SS таблицами: ", err)
 			continue
 		}
-		m.tables = append(m.tables, sst)
+		m.storage.AppendInLevel(sst, int(sst.GetVersion()))
 	}
-	slices.SortFunc(m.tables, func(a, b *domain.SSTable) int {
-		if a.GetTimestamp() > b.GetTimestamp() {
-			return 1 // a новее b → a должен быть после
-		}
-		if a.GetTimestamp() < b.GetTimestamp() {
-			return -1 // a старее b → a должен быть первым
-		}
-		return 0 // равны
-	})
+
+	log.Printf("Найдено %d ss таблиц", len(m.storage.levels[0].tables))
+
 	return nil
 }
 
@@ -287,50 +279,57 @@ func (m *Manager) ReadSST(file io.ReadSeeker) (*domain.SSTable, error) {
 }
 
 func (m *Manager) Find(key []byte) ([]byte, bool) {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
+	for i := range m.storage.levels {
+		level := m.storage.levels[i]
+		level.mu.RLock()
+		defer level.mu.RUnlock()
+		
+		for j := range level.tables {
+			
+			table := level.tables[j]
+			if bytes.Compare(key, table.GetMinKey()) < 0 || bytes.Compare(key, table.GetMaxKey()) > 0 {
+				continue
+			}
 
-	for i := range m.tables {
-		table := m.tables[i]
+			tableID := table.GetID()
+			fileName := fmt.Sprintf("%s_%d", m.SSTPrefix, tableID)
+			path := filepath.Join(m.workdir, fileName)
 
-		if bytes.Compare(key, table.GetMinKey()) < 0 || bytes.Compare(key, table.GetMaxKey()) > 0 {
-			continue
-		}
+			file, err := os.Open(path)
+			if err != nil {
+				log.Println("Произошла ошибка при открытии ss таблицы: ", err)
+				continue
+			}
+			defer file.Close()
 
-		tableID := table.Getid()
-		fileName := fmt.Sprintf("%s:%d", m.SSTPrefix, tableID)
-		path := filepath.Join(m.workdir, fileName)
+			bloomOffset, bloomSize := table.GetBloomMaskInfo()
+			_, err = file.Seek(int64(bloomOffset), io.SeekStart)
+			if err != nil {
+				log.Println("Ошибка при перемещении к bloom фильтру: ", err)
+				continue
+			}
 
-		file, err := os.Open(path)
-		if err != nil {
-			log.Println("Произошла ошибка при открытии ss таблицы: ", err)
-			continue
-		}
-		defer file.Close()
+			reader := bufio.NewReader(file)
+			mask := make([]byte, bloomSize)
+			_, err = io.ReadFull(reader, mask)
+			if err != nil {
+				log.Println("Ошибка при чтении bloom маски: ", err)
+				continue
+			}
 
-		bloomOffset, bloomSize := table.GetBloomMaskInfo()
-		_, err = file.Seek(int64(bloomOffset), io.SeekStart)
-		if err != nil {
-			log.Println("Ошибка при перемещении к bloom фильтру: ", err)
-			continue
-		}
+			if !m.saver.bloomFilter.Test(key, mask) {
+				log.Println("Ключа нет в ", tableID)
+				continue
+			}
 
-		reader := bufio.NewReader(file)
-		mask := make([]byte, bloomSize)
-		_, err = io.ReadFull(reader, mask)
-		if err != nil {
-			log.Println("Ошибка при чтении bloom маски: ", err)
-			continue
-		}
+			// Поиск через индекс
+			value, found := m.findViaIndex(table, file, key)
+			if found && value == nil {
+				return nil, false
+			} else if found && value != nil {
+				return value, true
+			}
 
-		if !m.saver.bloomFilter.Test(key, mask) {
-			continue
-		}
-
-		// Поиск через индекс
-		value, found := m.findViaIndex(table, file, key)
-		if found {
-			return value, true
 		}
 	}
 
@@ -338,6 +337,7 @@ func (m *Manager) Find(key []byte) ([]byte, bool) {
 }
 
 func (m *Manager) findViaIndex(table *domain.SSTable, file *os.File, key []byte) ([]byte, bool) {
+
 	indexStart := table.GetIndexOffset()
 	_, err := file.Seek(int64(indexStart), io.SeekStart)
 	if err != nil {
@@ -368,13 +368,14 @@ func (m *Manager) findViaIndex(table *domain.SSTable, file *os.File, key []byte)
 		cmp := bytes.Compare(key, index.Key)
 
 		if cmp == 0 {
+			log.Println("Ключ найден прямо в индексе")
 			_, err := file.Seek(int64(index.Offset), io.SeekStart)
 			if err != nil {
 				log.Println("Ошибка при перемещении к записи по индексу: ", err)
 				return nil, false
 			}
 
-			record, err := domain.ReadRecord(reader)
+			record, err := domain.ReadRecord(file)
 			if err != nil {
 				log.Println(err)
 				return nil, false
@@ -382,6 +383,7 @@ func (m *Manager) findViaIndex(table *domain.SSTable, file *os.File, key []byte)
 			return record.GetValue(), true
 
 		} else if cmp < 0 {
+			log.Println("Ключ меньше чем индекс")
 			// Ключ меньше текущего индексного ключа
 			if prevIndex != nil {
 				// Ищем в диапазоне от предыдущего индекса до текущего
@@ -389,6 +391,7 @@ func (m *Manager) findViaIndex(table *domain.SSTable, file *os.File, key []byte)
 				endOffset = index.Offset
 				return m.readRecordUntil(file, key, startOffset, endOffset)
 			} else {
+				log.Println("Ключ больше чем индекс")
 				// Ищем от начала данных до первого индекса
 				startOffset = table.GetDataStart()
 				endOffset = index.Offset
@@ -424,17 +427,17 @@ func (m *Manager) readRecordUntil(file *os.File, key []byte, startOffset, endOff
 		return nil, false
 	}
 
-	reader := bufio.NewReader(file)
+	// reader := bufio.NewReader(file)
 	currentOffset := startOffset
 
 	// Линейный поиск в указанном диапазоне
 	for currentOffset < endOffset {
 
-		record, err := domain.ReadRecord(reader)
+		record, err := domain.ReadRecord(file)
 		if err != nil {
+			log.Println(err)
 			break
 		}
-
 		cmp := bytes.Compare(key, record.GetKey())
 
 		if cmp == 0 {
@@ -442,22 +445,20 @@ func (m *Manager) readRecordUntil(file *os.File, key []byte, startOffset, endOff
 			if record.GetOperation() == domain.OP_PUT {
 				return record.GetValue(), true
 			} else if record.GetOperation() == domain.OP_DELETE {
-				return nil, false // Ключ удален
+				return nil, true // Ключ удален
 			}
 		} else if cmp < 0 {
 			// Прошли нужный ключ (ключи отсортированы по возрастанию)
 			// Больше нет смысла искать
 			break
 		}
-
 		// Обновляем текущую позицию
-		currentPos, _ := file.Seek(0, io.SeekCurrent)
-		currentOffset = uint64(currentPos)
-
-		// Проверяем не вышли ли за пределы диапазона
-		if currentOffset >= endOffset {
+		currentPos, err := file.Seek(0, io.SeekCurrent)
+		if err != nil {
+			log.Println(err)
 			break
 		}
+		currentOffset = uint64(currentPos)
 	}
 
 	return nil, false
