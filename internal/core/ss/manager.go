@@ -50,22 +50,20 @@ func (m *Manager) Start(ctx context.Context) error {
 	if m.workdir == "" {
 		return errors.New("workdir is not set")
 	}
-	log.Println("Начинаем проверку sst")
 	err := m.CheckSST()
 	if err != nil {
 		return err
 	}
-	log.Println("Проверка закончена")
 	go m.HandleSSTChan(ctx)
 
 	m.saver.Start(ctx)
-	log.Println("ss Manager запущен.")
+	log.Println("sstManager запущен.")
 	return nil
 }
 
 func (m *Manager) HandleSSTChan(ctx context.Context) {
-	log.Println("Начинаем держать sst канал")
-loop:
+
+	loop:
 	for {
 		select {
 		case sst := <-m.sstChan:
@@ -74,7 +72,7 @@ loop:
 			m.mu.Unlock()
 
 		case <-ctx.Done():
-			log.Println("Остановка CompactorManager по контексту...")
+			log.Println("Остановка sstManager по контексту...")
 			break loop
 		}
 	}

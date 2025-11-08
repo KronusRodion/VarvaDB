@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"varvaDB/internal/material/errors"
-	"varvaDB/internal/material/usecase"
+	"varvaDB/internal/api/material/errors"
+	"varvaDB/internal/api/material/usecase"
 
 	"github.com/gorilla/mux"
 )

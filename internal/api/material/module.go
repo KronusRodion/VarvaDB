@@ -2,8 +2,8 @@ package data
 
 import (
 	"varvaDB/internal/core/engine"
-	"varvaDB/internal/material/handlers"
-	"varvaDB/internal/material/usecase"
+	"varvaDB/internal/api/material/handlers"
+	"varvaDB/internal/api/material/usecase"
 
 	"github.com/gorilla/mux"
 )

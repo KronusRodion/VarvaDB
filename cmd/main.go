@@ -10,7 +10,7 @@ import (
 	"time"
 	"varvaDB/config"
 	"varvaDB/internal/core/engine"
-	"varvaDB/internal/material"
+	"varvaDB/internal/api/material"
 
 	"github.com/gorilla/mux"
 )
@@ -35,7 +35,6 @@ func main() {
 	if err != nil {
 		log.Println("Ошибка при сборке ядра: ", err)
 	}
-	log.Println("core построен")
 
 	engine := engine.New(core)
 	engine.Start(ctx)
