@@ -1,5 +1,7 @@
 package domain
 
+import "sync"
+
 type SSTable struct {
 	id         uint64
 	version    uint16
@@ -11,6 +13,14 @@ type SSTable struct {
 	minKey     []byte
 	maxKey     []byte
 	filter     []byte
+	flushMutex *sync.RWMutex
+}
+
+type Iterator interface {
+    Next() bool      
+    Record() *Record 
+    Error() error
+	Close() error
 }
 
 func NewSSTable(id uint64, version uint16, createdAt int64, dataStart, indexStart, bloomStart uint64, bloomSize uint32, minKey, maxKey, filter []byte) *SSTable {
@@ -25,6 +35,7 @@ func NewSSTable(id uint64, version uint16, createdAt int64, dataStart, indexStar
 		minKey:     minKey,
 		maxKey:     maxKey,
 		filter:     filter,
+		flushMutex: &sync.RWMutex{},
 	}
 }
 
@@ -63,3 +74,13 @@ func (s *SSTable) GetDataStart() uint64 {
 func (s *SSTable) GetVersion() uint16 {
 	return s.version
 }
+
+func (s *SSTable) TryToLock() bool {
+	return s.flushMutex.TryLock()
+}
+
+func (s *SSTable) Unlock() {
+	s.flushMutex.Unlock()
+}
+
+

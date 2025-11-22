@@ -2,7 +2,6 @@ package wal
 
 import (
 	"bufio"
-	"crypto/rand"
 	"encoding/binary"
 	"fmt"
 	"io"
@@ -13,10 +12,11 @@ import (
 	"time"
 	"varvaDB/config"
 	"varvaDB/internal/domain"
+	"varvaDB/pkg/utils"
 )
 
 type Wal struct {
-	id 		  uint64
+	id        uint64
 	file      *os.File
 	mu        *sync.Mutex
 	filepath  string
@@ -24,14 +24,12 @@ type Wal struct {
 }
 
 func New(cfg *config.WalConfig) (*Wal, error) {
-	
+
 	if err := os.MkdirAll(cfg.WalWorkdir, 0755); err != nil {
 		return nil, fmt.Errorf("failed to create WAL directory: %v", err)
 	}
 	createdAt := time.Now().Unix()
-	rawID := make([]byte, 8)
-	rand.Read(rawID)
-	id := binary.LittleEndian.Uint64(rawID)
+	id := utils.GenerateID()
 
 	log.Println("Создаем новый журнал c timestamp ", createdAt)
 	walName := fmt.Sprintf("wal_%d.log", id)
@@ -49,17 +47,16 @@ func New(cfg *config.WalConfig) (*Wal, error) {
 		return nil, fmt.Errorf("failed to write createdAt in WAL file: %v", err)
 	}
 
-	path := fmt.Sprintf("%s\\%s", cfg.WalWorkdir, file.Name())
 	var mu sync.Mutex
 
 	wal := &Wal{
-		id:id,
+		id:        id,
 		file:      file,
-		filepath:  path,
+		filepath:  file.Name(), // file.Name() возвращает имя вместе с директорией
 		mu:        &mu,
 		createdAt: createdAt,
 	}
-	
+
 	return wal, nil
 }
 
@@ -68,30 +65,37 @@ func Open(cfg config.WalConfig, walPath string, createdAt int64) (*Wal, error) {
 	if err := os.MkdirAll(cfg.WalWorkdir, 0755); err != nil {
 		return nil, fmt.Errorf("failed to create WAL directory: %v", err)
 	}
-
-
 	file, err := os.OpenFile(walPath, os.O_APPEND|os.O_CREATE, 0755)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create WAL file: %v", err)
 	}
+	filename := filepath.Base(file.Name())
 
-	path := fmt.Sprintf("%s\\%s", cfg.WalWorkdir, file.Name())
+	var id uint64
+	log.Println("file.Name() ", filename)
+	_, err = fmt.Sscanf(filename, "wal_%d.log", &id)
+	if err != nil {
+		return nil, err
+	}
+
+
 	var mu sync.Mutex
-
+	
 	wal := &Wal{
+		id:        id,
 		file:      file,
-		filepath:  path,
+		filepath:  file.Name(),
 		mu:        &mu,
 		createdAt: createdAt,
 	}
-
+	log.Println("Old wal - ", wal)
 	return wal, nil
 }
 
 func (w *Wal) writeRecord(record *domain.Record) error {
 	w.mu.Lock()
 	defer w.mu.Unlock()
-	
+
 	key := record.GetKey()
 	value := record.GetValue()
 	operation := record.GetOperation()
@@ -136,7 +140,7 @@ func (w *Wal) GetRecords() []*domain.Record {
 	oldRecords := make([]*domain.Record, 0, 1000) // Выделяем место для 1000 записей для уменьшения кол-ва аллокаций
 
 	for {
-		record, err := domain.ReadRecord( w.file)
+		record, err := domain.ReadRecord(w.file)
 		if err == io.EOF {
 			break
 		} else if err != nil {
@@ -148,6 +152,3 @@ func (w *Wal) GetRecords() []*domain.Record {
 	log.Printf("Было найдено %d старых записей", len(oldRecords))
 	return oldRecords
 }
-
-
-

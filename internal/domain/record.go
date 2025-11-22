@@ -3,7 +3,6 @@ package domain
 import (
 	"encoding/binary"
 	"fmt"
-	"io"
 	"log"
 	"os"
 	"time"
@@ -67,60 +66,30 @@ func (r *Record) SetOperation(operation Operation) *Record {
 }
 
 func ReadRecord(f *os.File) (*Record, error) {
-
-	currentPos, err := f.Seek(0, io.SeekCurrent)
-	if err != nil {
-		log.Println(err)
-	}
-	log.Println("POS ", currentPos)
-
+	log.Println("Начинаем чтение записи")
 	var operation byte
-	err = binary.Read(f, binary.LittleEndian, &operation)
+	err := binary.Read(f, binary.LittleEndian, &operation)
 	if err != nil {
 		return nil, err
 	}
-
-	currentPos, err = f.Seek(0, io.SeekCurrent)
-	if err != nil {
-		log.Println(err)
-	}
-	log.Println("POS ", currentPos)
-	
+	log.Println("timestamp")
 	var timestamp int64
 	err = binary.Read(f, binary.LittleEndian, &timestamp)
 	if err != nil {
 		return nil, err
 	}
 
-	currentPos, err = f.Seek(0, io.SeekCurrent)
-	if err != nil {
-		log.Println(err)
-	}
-	log.Println("POS ", currentPos)
-
 	var keyLen int32
 	err = binary.Read(f, binary.LittleEndian, &keyLen)
 	if err != nil {
 		return nil, err
 	}
-	log.Println("keyLen - ", keyLen)
-	currentPos, err = f.Seek(0, io.SeekCurrent)
-	if err != nil {
-		log.Println(err)
-	}
-	log.Println("POS ", currentPos)
 
 	key := make([]byte, keyLen)
 	err = binary.Read(f, binary.LittleEndian, &key)
 	if err != nil {
 		return nil, err
 	}
-	currentPos, err = f.Seek(0, io.SeekCurrent)
-	if err != nil {
-		log.Println(err)
-	}
-	log.Println("POS ", currentPos)
-
 	var valueLen int32
 	err = binary.Read(f, binary.LittleEndian, &valueLen)
 	if err != nil {
@@ -131,22 +100,12 @@ func ReadRecord(f *os.File) (*Record, error) {
 		return nil, fmt.Errorf("invalid value length: %d (hex: %x)", 
 			valueLen, uint32(valueLen))
 	}
-	currentPos, err = f.Seek(0, io.SeekCurrent)
-	if err != nil {
-		log.Println(err)
-	}
-	log.Println("POS ", currentPos)
 	
 	value := make([]byte, valueLen)
 	err = binary.Read(f, binary.LittleEndian, &value)
 	if err != nil {
 		return nil, err
 	}
-	currentPos, err = f.Seek(0, io.SeekCurrent)
-	if err != nil {
-		log.Println(err)
-	}
-	log.Println("POS ", currentPos)
 
 	record := NewRecordWithTimestamp(key, value, Operation(operation), timestamp)
 

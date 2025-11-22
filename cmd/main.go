@@ -9,8 +9,8 @@ import (
 	"syscall"
 	"time"
 	"varvaDB/config"
-	"varvaDB/internal/core/engine"
 	"varvaDB/internal/api/material"
+	"varvaDB/internal/core/engine"
 
 	"github.com/gorilla/mux"
 )
@@ -64,6 +64,7 @@ func main() {
 
 
 	sig := <-sigChan
+	cancel()
 	log.Printf("Пришел сигнал %s, останавливаем СУБД...", sig)
 
 }

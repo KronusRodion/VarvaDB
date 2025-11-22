@@ -75,13 +75,13 @@ func (m *Manager) GetActiveWal() *Wal {
 }
 
 func (m *Manager) WriteRecord(record *domain.Record) error {
-	log.Println("Записываем в wal с timestamp - ", m.activeWal.createdAt)
+
 	err :=  m.activeWal.writeRecord(record)
 	return err
 }
 
 func (m *Manager) findActiveLog() error {
-
+	log.Println("Выполняем поиск активного журнала")
 	if err := os.MkdirAll(m.cfg.WalWorkdir, 0755); err != nil {
 		return err
 	}

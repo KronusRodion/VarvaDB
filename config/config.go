@@ -24,7 +24,8 @@ type CompactorConfig struct {
 }
 
 type SSTManagerConfig struct {
-	Bloom BloomConfig		`yaml:"bloom"`
+	Bloom 		BloomConfig		`yaml:"bloom"`
+	FlushSize	int				`yaml:"flushSize"`
 }
 
 type WalConfig struct {

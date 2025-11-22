@@ -3,6 +3,7 @@ compactor:
   levelSize: 4
 
 sstmanager:
+  flushSize: 4
   bloom:
     expectedElements: 5000000     # 5 миллионов ключей
     falsePositiveRate: 0.005      # 0.5% ложных срабатываний

@@ -28,7 +28,7 @@ type Manager struct {
 }
 
 func NewManager(cfg *config.Config, recordsChan chan *domain.SSMessage, deleteWalChan chan<- uint64) *Manager {
-	storage := NewStorage()
+	storage := NewStorage(cfg.SSTPrefix, cfg.SSTWorkdir, cfg.SSTManager.FlushSize, cfg)
 
 	// NewSaver принимает записи из канала и
 	saver, ch := newSaver(cfg, recordsChan, deleteWalChan)
@@ -45,12 +45,22 @@ func NewManager(cfg *config.Config, recordsChan chan *domain.SSMessage, deleteWa
 	}
 }
 
+func (m *Manager) Size() int {
+	size := 0
+	m.mu.Lock()
+	for _, level := range m.storage.levels {
+		size += len(level.tables)
+	}
+	m.mu.Unlock()
+	return size
+}
+
 func (m *Manager) Start(ctx context.Context) error {
 
 	if m.workdir == "" {
 		return errors.New("workdir is not set")
 	}
-	err := m.CheckSST()
+	err := m.CheckSST(ctx)
 	if err != nil {
 		return err
 	}
@@ -68,7 +78,7 @@ func (m *Manager) HandleSSTChan(ctx context.Context) {
 		select {
 		case sst := <-m.sstChan:
 			m.mu.Lock()
-			m.storage.AppendInLevel(sst, 0)
+			m.storage.AppendInLevel(ctx, sst, int(sst.GetVersion()))
 			m.mu.Unlock()
 
 		case <-ctx.Done():
@@ -78,7 +88,7 @@ func (m *Manager) HandleSSTChan(ctx context.Context) {
 	}
 }
 
-func (m *Manager) CheckSST() error {
+func (m *Manager) CheckSST(ctx context.Context) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -92,10 +102,12 @@ func (m *Manager) CheckSST() error {
 		return err
 	}
 	for _, fileEntry := range files {
+		log.Println("file Entry ", fileEntry.Name())
 		if !strings.HasPrefix(fileEntry.Name(), m.SSTPrefix) {
 			continue
 		}
-		file, err := os.Open(filepath.Join(m.workdir, fileEntry.Name()))
+		path := filepath.Join(m.workdir, fileEntry.Name())
+		file, err := os.Open(path)
 		if err != nil {
 			log.Println("Ошибка чтения файлы в директории с SS таблицами: ", err)
 			continue
@@ -107,7 +119,7 @@ func (m *Manager) CheckSST() error {
 			log.Println("Ошибка чтения файлы в директории с SS таблицами: ", err)
 			continue
 		}
-		m.storage.AppendInLevel(sst, int(sst.GetVersion()))
+		m.storage.AppendInLevel(ctx, sst, int(sst.GetVersion()))
 	}
 
 	log.Printf("Найдено %d ss таблиц", len(m.storage.levels[0].tables))
@@ -116,26 +128,27 @@ func (m *Manager) CheckSST() error {
 }
 
 func (m *Manager) ReadSST(file io.ReadSeeker) (*domain.SSTable, error) {
-	// Читаем заголовок
-	id := make([]byte, 8)
-	_, err := file.Read(id)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read ID: %w", err)
-	}
-	sstID := binary.LittleEndian.Uint64(id)
 
+	var sstID uint64
+    err := binary.Read(file, binary.LittleEndian, &sstID)
+    if err != nil {
+        return nil, fmt.Errorf("failed to read version: %w", err)
+    }
+
+	log.Println("vers")
 	var version uint16
 	err = binary.Read(file, binary.LittleEndian, &version)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read version: %w", err)
 	}
-
+	log.Println("crea")
 	var createdAt int64
 	err = binary.Read(file, binary.LittleEndian, &createdAt)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read creation time: %w", err)
 	}
 
+	log.Println("data_start")
 	// Получаем позицию начала данных
 	dataStart, err := file.Seek(0, io.SeekCurrent)
 	if err != nil {
@@ -143,12 +156,14 @@ func (m *Manager) ReadSST(file io.ReadSeeker) (*domain.SSTable, error) {
 	}
 	dataStart += 4 // +4 для dataLen
 
+	log.Println("dataLen")
 	// Читаем длину данных
 	var dataLen uint32
 	err = binary.Read(file, binary.LittleEndian, &dataLen)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read data length: %w", err)
 	}
+	log.Println("lastRecordOffset")
 
 	// Пропускаем данные (нам нужен только первый и последний ключ)
 	_, err = file.Seek(int64(dataLen), io.SeekCurrent)
@@ -171,7 +186,7 @@ func (m *Manager) ReadSST(file io.ReadSeeker) (*domain.SSTable, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to seek to data start: %w", err)
 	}
-
+	log.Println("minmax")
 	// Пропускаем operation и timestamp первой записи
 	_, err = file.Seek(1+8, io.SeekCurrent) // operation(4) + timestamp(8)
 	if err != nil {
@@ -184,6 +199,7 @@ func (m *Manager) ReadSST(file io.ReadSeeker) (*domain.SSTable, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to read min key length: %w", err)
 	}
+	log.Println("minmax1")
 	minKey = make([]byte, minKeyLen)
 	_, err = io.ReadFull(file, minKey)
 	if err != nil {
@@ -201,7 +217,7 @@ func (m *Manager) ReadSST(file io.ReadSeeker) (*domain.SSTable, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to skip last operation/timestamp: %w", err)
 	}
-
+	log.Println("minmax2")
 	// Читаем maxKey
 	var maxKeyLen uint32
 	err = binary.Read(file, binary.LittleEndian, &maxKeyLen)
@@ -217,7 +233,7 @@ func (m *Manager) ReadSST(file io.ReadSeeker) (*domain.SSTable, error) {
 	// Возвращаемся к чтению остальных секций
 	// Позиция после lastRecordOffset - это начало индекса
 	indexStart := dataStart + int64(dataLen) + 8 // dataStart + dataLen + lastRecordOffset(8)
-
+	log.Println("indexStart")
 	_, err = file.Seek(indexStart, io.SeekStart)
 	if err != nil {
 		return nil, fmt.Errorf("failed to seek to index start: %w", err)
@@ -235,7 +251,7 @@ func (m *Manager) ReadSST(file io.ReadSeeker) (*domain.SSTable, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to skip index: %w", err)
 	}
-
+	log.Println("bloomStart")
 	// Позиция начала bloom фильтра
 	bloomStart := indexStart + int64(indexLen) + 4 // +4 для indexLen
 
@@ -252,7 +268,7 @@ func (m *Manager) ReadSST(file io.ReadSeeker) (*domain.SSTable, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to seek to bloom filter: %w", err)
 	}
-
+	log.Println("bloomMask")
 	bloomMask := make([]byte, bloomSize)
 	_, err = io.ReadFull(file, bloomMask)
 	if err != nil {
