@@ -25,6 +25,7 @@ type storage struct {
 	workDir				string
 	maxTablesInLevel	int
 	bloomFilter			*bloom.BloomFilter
+	clearTime			int
 }
 
 func NewStorage(SSTPrefix, workDir string, maxTablesInLevel int, cfg *config.Config) *storage {
@@ -38,6 +39,7 @@ func NewStorage(SSTPrefix, workDir string, maxTablesInLevel int, cfg *config.Con
 		workDir: workDir,
 		maxTablesInLevel: maxTablesInLevel,
 		bloomFilter: filter,
+		clearTime:	cfg.SSTManager.ClearTime,
 	}
 }
 
@@ -55,6 +57,56 @@ func NewLevel(index int) *level {
 		mu:     &sync.RWMutex{},
 		index:  index,
 	}
+}
+
+func (s *storage) Start(ctx context.Context) {
+
+	ticker := time.NewTicker(time.Duration(s.clearTime) * time.Second)
+	log.Printf("Хранилище запущено. Очистка будет производиться каждые %d секунд.", s.clearTime)
+	go func(){
+		for {
+		select {
+		case <- ctx.Done():
+			log.Println("Остановка хранилища...")
+			return
+		case <- ticker.C:
+			log.Println("Очистка хранилища...")
+			s.Clear()
+		}
+	}
+	}()
+}
+func (s storage) Clear() (error) {
+	actualTables := make(map[string]struct{})
+
+	for _, level := range s.levels {
+		level.mu.Lock()
+		for _, v := range level.tables {
+			tableId := v.GetID()
+			key := fmt.Sprintf("%s_%d", s.SSTPrefix, tableId)
+			actualTables[key] = struct{}{}
+		}
+		level.mu.Unlock()
+	}
+
+	files, err := os.ReadDir(s.workDir)
+	if err != nil {
+		return err
+	}
+	for _, fileEntry := range files {
+		log.Println("file entry ", fileEntry.Name())
+		if _, ok := actualTables[fileEntry.Name()]; !ok {
+			log.Println("Удаляем таблицу ", fileEntry.Name())
+			path := filepath.Join(s.workDir, fileEntry.Name())
+			err := os.Remove(path)
+			if err != nil {
+				log.Println("Ошибка удаления старой таблицы: ", err)
+			}
+		}
+
+	}
+
+	return nil
 }
 
 func (s *storage) AppendInLevel(ctx context.Context, table *domain.SSTable, index int) {

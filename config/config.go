@@ -10,45 +10,45 @@ import (
 )
 
 type Config struct {
-	Compactor  		CompactorConfig		`yaml:"compactor"`
-	SSTManager 		SSTManagerConfig	`yaml:"sstmanager"`
-	WAL        		WalConfig			`yaml:"wal"`
-	SSTWorkdir 		string				`yaml:"sstWorkdir"`
-	SSTPrefix  		string				`yaml:"sstPrefix"`
-	Memtable		MemtableConfig		`yaml:"memtable"`
+	Compactor  CompactorConfig  `yaml:"compactor"`
+	SSTManager SSTManagerConfig `yaml:"sstmanager"`
+	WAL        WalConfig        `yaml:"wal"`
+	SSTWorkdir string           `yaml:"sstWorkdir"`
+	SSTPrefix  string           `yaml:"sstPrefix"`
+	Memtable   MemtableConfig   `yaml:"memtable"`
 }
 
 type CompactorConfig struct {
-	TableSize int		`yaml:"tableSize"`
-	LevelSize int		`yaml:"levelSize"`
+	TableSize int `yaml:"tableSize"`
+	LevelSize int `yaml:"levelSize"`
 }
 
 type SSTManagerConfig struct {
-	Bloom 		BloomConfig		`yaml:"bloom"`
-	FlushSize	int				`yaml:"flushSize"`
+	Bloom     BloomConfig `yaml:"bloom"`
+	FlushSize int         `yaml:"flushSize"`
+	ClearTime int		  `yaml:"clearTime"`
 }
 
 type WalConfig struct {
-	WalWorkdir string		`yaml:"walWorkdir"`
-	WALPrefix  string		`yaml:"walPrefix"`
+	WalWorkdir string `yaml:"walWorkdir"`
+	WALPrefix  string `yaml:"walPrefix"`
 }
 
 type MemtableConfig struct {
-	MaxSize int		`yaml:"maxSize"`
+	MaxSize int `yaml:"maxSize"`
 }
 
 type BloomConfig struct {
-	ExpectedElements  uint64		`yaml:"expectedElements"`
-	FalsePositiveRate float64		`yaml:"falsePositiveRate"`
+	ExpectedElements  uint64  `yaml:"expectedElements"`
+	FalsePositiveRate float64 `yaml:"falsePositiveRate"`
 }
 
 func LoadConfig() (*Config, error) {
 
 	err := godotenv.Load()
-    if err != nil {
-        return nil, fmt.Errorf(" .env file not found")
-    }
-
+	if err != nil {
+		return nil, fmt.Errorf(" .env file not found")
+	}
 
 	cfgDir := os.Getenv("CONFIG_DIR")
 	if cfgDir == "" {

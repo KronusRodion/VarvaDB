@@ -20,7 +20,7 @@ type RequestData struct {
 // Конфигурация
 const (
 	url           = "http://localhost:8080/api/v1/" // Замените на ваш URL
-	totalRequests = 100
+	totalRequests = 200
 	maxGoroutines = 300
 )
 
@@ -37,7 +37,7 @@ func main() {
 	
 	fmt.Printf("Начинаем отправку %d запросов с %d горутинами...\n", totalRequests, maxGoroutines)
 	
-	for i := 0; i < totalRequests; i++ {
+	for i := 0+200; i < totalRequests+200; i++ {
 		wg.Add(1)
 		semaphore <- struct{}{} // Занимаем слот
 		

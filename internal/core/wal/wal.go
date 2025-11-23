@@ -72,7 +72,6 @@ func Open(cfg config.WalConfig, walPath string, createdAt int64) (*Wal, error) {
 	filename := filepath.Base(file.Name())
 
 	var id uint64
-	log.Println("file.Name() ", filename)
 	_, err = fmt.Sscanf(filename, "wal_%d.log", &id)
 	if err != nil {
 		return nil, err

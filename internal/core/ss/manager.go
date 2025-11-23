@@ -67,6 +67,7 @@ func (m *Manager) Start(ctx context.Context) error {
 	go m.HandleSSTChan(ctx)
 
 	m.saver.Start(ctx)
+	m.storage.Start(ctx)
 	log.Println("sstManager запущен.")
 	return nil
 }
