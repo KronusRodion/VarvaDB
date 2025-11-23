@@ -94,9 +94,7 @@ func (s storage) Clear() (error) {
 		return err
 	}
 	for _, fileEntry := range files {
-		log.Println("file entry ", fileEntry.Name())
 		if _, ok := actualTables[fileEntry.Name()]; !ok {
-			log.Println("Удаляем таблицу ", fileEntry.Name())
 			path := filepath.Join(s.workDir, fileEntry.Name())
 			err := os.Remove(path)
 			if err != nil {
@@ -110,7 +108,6 @@ func (s storage) Clear() (error) {
 }
 
 func (s *storage) AppendInLevel(ctx context.Context, table *domain.SSTable, index int) {
-	log.Printf("Добавляем новую таблицу в %d уровень", index)
 	s.mu.Lock()
 	if len(s.levels) <= index {
 
@@ -135,12 +132,9 @@ func (s *storage) AppendInLevel(ctx context.Context, table *domain.SSTable, inde
 		}
 		return 0 // равны
 	})
-	log.Println("s.levels[index].tables ", len(s.levels[index].tables))
-	log.Println("s.maxTablesInLevel ", s.maxTablesInLevel)
 	
 	if len(s.levels[index].tables) % s.maxTablesInLevel == 0 {
 		s.levels[index].mu.Unlock()
-		log.Println("Запускаем flush")
 		go s.Flush(ctx, s.levels[index])
 	} else {
 		s.levels[index].mu.Unlock()
@@ -223,12 +217,10 @@ func (s *storage) Flush(ctx context.Context, level *level) {
 		}
 	}
 	level.mu.Unlock()
-	log.Println("Добавлено таблиц на удаление - ", len(oldTables))
 	
 	if len(oldTables) != length {
 		return
 	}
-	log.Println("Начинаем merge")
 	table, err := s.MergeTables(ctx, oldTables, level.index+1)
 	if err != nil {
 		return
@@ -242,7 +234,6 @@ func (s *storage) Flush(ctx context.Context, level *level) {
 	}
 	
 	level.mu.Unlock()
-	log.Println("Закончили append")
 }
 
 
@@ -281,7 +272,6 @@ func (s *storage) MergeTables(ctx context.Context, tables []*domain.SSTable, ver
 
 	for heap.Len() > 0 {
 		minRecord := heap.Pop()
-		log.Println("minRecord - ", minRecord)
 		saveChan <- minRecord.Record
 
 		// Достаем все копии записи
@@ -376,7 +366,6 @@ func (s *storage) SaveInNewSST(ctx context.Context, data chan *domain.Record, id
 	mask := s.bloomFilter.GenerateMask([][]byte(nil))
 
 	firstRecord := <-data
-	log.Println("Пришла первая запись - ", firstRecord)
 	{
 		record := firstRecord
 		key := record.GetKey()

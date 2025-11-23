@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -53,7 +54,7 @@ func main() {
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 
 	go func() {
-		port := ":8080"
+		port := fmt.Sprintf(":%s", os.Getenv("PORT"))
 		log.Println("Сервер запущен на порту ", port)
 		err := http.ListenAndServe(port, r)
 		if err != nil {

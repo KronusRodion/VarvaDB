@@ -84,10 +84,9 @@ SSTable hit: ~1-2 мс (disk seek + read)
 
 Bloom filter miss: ~0.01 мс (no disk access)
 
-2. Запись (PUT)
+2. Запись (POST)
 Синхронная: 2-5 мс (WAL sync + MemTable)
 
-Асинхронная: 0.5-2 мс (WAL async + MemTable)
 
 3. Компрессия
 Фоновая операция

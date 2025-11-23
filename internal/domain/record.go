@@ -3,7 +3,6 @@ package domain
 import (
 	"encoding/binary"
 	"fmt"
-	"log"
 	"os"
 	"time"
 )
@@ -66,13 +65,11 @@ func (r *Record) SetOperation(operation Operation) *Record {
 }
 
 func ReadRecord(f *os.File) (*Record, error) {
-	log.Println("Начинаем чтение записи")
 	var operation byte
 	err := binary.Read(f, binary.LittleEndian, &operation)
 	if err != nil {
 		return nil, err
 	}
-	log.Println("timestamp")
 	var timestamp int64
 	err = binary.Read(f, binary.LittleEndian, &timestamp)
 	if err != nil {
@@ -95,7 +92,6 @@ func ReadRecord(f *os.File) (*Record, error) {
 	if err != nil {
 		return nil, err
 	}
-	log.Println("valueLen - ", valueLen)
 	if valueLen < 0 {
 		return nil, fmt.Errorf("invalid value length: %d (hex: %x)", 
 			valueLen, uint32(valueLen))

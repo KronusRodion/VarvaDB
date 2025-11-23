@@ -2,7 +2,6 @@ package ss
 
 import (
 	"bytes"
-	"log"
 	"varvaDB/internal/domain"
 )
 
@@ -21,13 +20,10 @@ func NewHeap(len int) RecordHeap {
 }
 
 func (h *RecordHeap) Init(iterators []domain.Iterator) error {
-	log.Println("init heap")
 	for i := range iterators {
 		iter := iterators[i]
-		log.Println("iterator ", i)
 		if iter.Next() {
 			record := iter.Record()
-			log.Println("init record: ", record)
 			if err := iter.Error(); err != nil {
 				return err
 			}
@@ -37,7 +33,6 @@ func (h *RecordHeap) Init(iterators []domain.Iterator) error {
 					Iterator: iter,
 				},
 			)
-			log.Println(len(*h))
 		}
 	}
 	return nil
@@ -59,7 +54,7 @@ func (h RecordHeap) Less(i, j int) bool {
 	if res == 0 {
 		return h[i].Record.GetTimestamp() < h[j].Record.GetTimestamp()
 	}
-	return res < 0
+	return res > 0
 }
 
 // Swap - меняет - i, j-элементы местами
@@ -76,7 +71,7 @@ func (h *RecordHeap) Push(item *HeapItem) {
 	// Пока i не станет нулем
 	for i > 0 {
 		parent := i - 1
-		// Проверяем, что новая запись меньше старой
+		// Проверяем, что новая запись меньше родительской
 		if (*h).Less(i, parent) {
 			break
 		}
@@ -94,6 +89,5 @@ func (h *RecordHeap) Pop() *HeapItem {
 	} else {
 		(*h) = NewHeap(1)
 	}
-
 	return item
 }
