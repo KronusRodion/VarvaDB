@@ -28,41 +28,41 @@ Use Cases
 varvaDB/
 ├── cmd/
 │   └── main.go                      # Точка входа приложения
-|── config/
+│── config/
 │   └── config.go                    # Загрузчик конфигурации
 ├── internal/
 │   ├── bloom/
 │   │   ├── bloom.go                 # Реализация фильтра блума
 │   ├── core/
-|   |   |── engine/
-|   |   |    |── engine.go/          # Интерфейс ядра
-|   |   |    └── lsm.go/             # Ядро на базе LSM дерева
-|   |   |── memTable/
-|   |   |   └── memTable.go/         # Хранилище данных в оперативной памяти
-|   |   |── ss/
-|   |   |    |── manager.go/         # Менеджер ss таблиц
-|   |   |    |── saver.go/           # Запись данных на диск   
-|   |   |    └── compactor.go/       # Фоновое сжатие ss таблиц   
-|   |   |── wal/
-|   |   |    |── manager.go/         # Менеджер wal журнала
-|   |   |    └── wal.go/             # Запись данных на диск
+│   │   │── engine/
+│   │   │    │── engine.go/          # Интерфейс ядра
+│   │   │    └── lsm.go/             # Ядро на базе LSM дерева
+│   │   │── memTable/
+│   │   │   └── memTable.go/         # Хранилище данных в оперативной памяти
+│   │   │── ss/
+│   │   │    │── manager.go/         # Менеджер ss таблиц
+│   │   │    │── saver.go/           # Запись данных на диск   
+│   │   │    └── compactor.go/       # Фоновое сжатие ss таблиц   
+│   │   │── wal/
+│   │   │    │── manager.go/         # Менеджер wal журнала
+│   │   │    └── wal.go/             # Запись данных на диск
 │   ├── domain/
 │   │   ├── index.go                 # Индекс
 │   │   ├── operations.go            # Типы операций
 │   │   ├── record.go                # Записи
-│   │   |── ssMessage.go             # Сообщение для saver
+│   │   │── ssMessage.go             # Сообщение для saver
 │   │   └── table.go                 # Таблицы
 │   └── material/
-|       |── errors/
-│       |    └── errors.go           # Ошибки хэндлера
-|       |── handlers/
-│       │    |── handler.go          # Объект http хэндлера
-│       |    └── interface.go        # Интерфейс хэндлера
-|       |── usecase/
-│       │    |── usecase.go          # Объект usecase
-│       |    └── interface.go        # Интерфейс usecase
+│       │── errors/
+│       │    └── errors.go           # Ошибки хэндлера
+│       │── handlers/
+│       │    │── handler.go          # Объект http хэндлера
+│       │    └── interface.go        # Интерфейс хэндлера
+│       │── usecase/
+│       │    │── usecase.go          # Объект usecase
+│       │    └── interface.go        # Интерфейс usecase
 │       └── module.go                # Модуль, который собирает юзкейс и хэндлер
-|
+│
 ├── go.mod
 └── README.md
 ```
